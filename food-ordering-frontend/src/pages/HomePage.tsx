@@ -1,5 +1,3 @@
-import landingImage from "../assets/landing.png";
-import appDownloadImage from "../assets/appDownload.png";
 import SearchBar, { SearchForm } from "@/components/SearchBar";
 import { useNavigate } from "react-router-dom";
 import { useCitySearch } from "@/api/CityApi";
@@ -54,7 +52,11 @@ const HomePage = () => {
           </div>
         </div>
         <div className="grid md:grid-cols-2 gap-5">
-          <img src={landingImage} />
+          <img
+            src="/landing.png"
+            alt="Food delivery illustration"
+            loading="lazy"
+          />
           <div className="flex flex-col items-center justify-center gap-4 text-center">
             <span className="font-bold text-3xl tracking-tighter">
               Experience Seamless Ordering
@@ -63,7 +65,11 @@ const HomePage = () => {
               Download the BigHungers mobile app for instant ordering, exclusive
               deals, and personalized recommendations tailored to your taste
             </span>
-            <img src={appDownloadImage} />
+            <img
+              src="/appDownload.png"
+              alt="Download BigHungers app"
+              loading="lazy"
+            />
           </div>
         </div>
       </div>
