@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useCitySearch } from "@/api/CityApi";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface CityDropdownProps {
   value: string;
@@ -30,6 +31,10 @@ const CityDropdown = ({ value, onChange }: CityDropdownProps) => {
     setShowDropdown(false);
     onChange(city);
   };
+
+  if (loading) {
+    return <Skeleton className="w-full h-8" />;
+  }
 
   return (
     <div className="relative w-full">
@@ -62,11 +67,6 @@ const CityDropdown = ({ value, onChange }: CityDropdownProps) => {
             <li className="px-3 py-2 text-gray-500">No city found</li>
           )}
         </ul>
-      )}
-      {loading && (
-        <div className="absolute mt-1 text-xs text-gray-500">
-          Loading cities...
-        </div>
       )}
       {error && (
         <div className="absolute mt-1 text-xs text-red-500">{error}</div>

@@ -4,6 +4,7 @@ import OrderSummary from "@/components/OrderSummary";
 import RestaurantInfo from "@/components/RestaurantInfo";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Card, CardFooter } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useState, useEffect } from "react";
 
 import { useParams } from "react-router-dom";
@@ -133,7 +134,50 @@ const DetailPage = () => {
   };
 
   if (isLoading || !restaurant) {
-    return "Loading...";
+    return (
+      <div className="flex flex-col gap-10">
+        <AspectRatio ratio={8 / 2}>
+          <Skeleton className="h-full w-full rounded-md" />
+        </AspectRatio>
+        <div className="grid md:grid-cols-[4fr_2fr] gap-5 md:px-0">
+          <div className="flex flex-col gap-4">
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-64" />
+              <Skeleton className="h-4 w-48" />
+              <div className="flex gap-2">
+                <Skeleton className="h-6 w-20" />
+                <Skeleton className="h-6 w-20" />
+              </div>
+            </div>
+            <Skeleton className="h-7 w-24" />
+            {[...Array(3)].map((_, index) => (
+              <div key={index} className="flex gap-4 p-4 border rounded-lg">
+                <Skeleton className="h-24 w-24 rounded-md" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-5 w-32" />
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-9 w-28" />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div>
+            <Card>
+              <div className="p-6 space-y-4">
+                <Skeleton className="h-6 w-32" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-10 w-full" />
+              </div>
+              <CardFooter>
+                <Skeleton className="h-10 w-full" />
+              </CardFooter>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

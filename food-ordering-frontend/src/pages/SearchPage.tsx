@@ -5,6 +5,7 @@ import SearchBar, { SearchForm } from "@/components/SearchBar";
 import SearchResultCard from "@/components/SearchResultCard";
 import SearchResultInfo from "@/components/SearchResultInfo";
 import SortOptionDropdown from "@/components/SortOptionDropdown";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useState } from "react";
 import { useCitySearch } from "@/api/CityApi";
 import { useParams, useNavigate } from "react-router-dom";
@@ -85,10 +86,6 @@ const SearchPage = () => {
     }));
   };
 
-  if (isLoading) {
-    return <span>Loading ...</span>;
-  }
-
   // If city is not in the list, show no results
   if (
     city !== "all" &&
@@ -132,22 +129,51 @@ const SearchPage = () => {
           onReset={resetSearch}
           city={city}
         />
-        <div className="flex justify-between flex-col gap-3 lg:flex-row">
-          <SearchResultInfo total={results.pagination.total} city={city} />
-          <SortOptionDropdown
-            sortOption={searchState.sortOption}
-            onChange={(value) => setSortOption(value)}
-          />
-        </div>
+        {isLoading ? (
+          <>
+            <div className="flex justify-between flex-col gap-3 lg:flex-row">
+              <Skeleton className="h-6 w-48" />
+              <Skeleton className="h-10 w-40" />
+            </div>
+            {[...Array(5)].map((_, index) => (
+              <div key={index} className="border rounded-lg p-4 space-y-4">
+                <div className="flex gap-4">
+                  <Skeleton className="h-32 w-32 rounded-md" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-6 w-3/4" />
+                    <Skeleton className="h-4 w-1/2" />
+                    <Skeleton className="h-4 w-2/3" />
+                    <div className="flex gap-2 mt-2">
+                      <Skeleton className="h-5 w-16" />
+                      <Skeleton className="h-5 w-16" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </>
+        ) : (
+          <>
+            <div className="flex justify-between flex-col gap-3 lg:flex-row">
+              <SearchResultInfo total={results?.pagination?.total || 0} city={city} />
+              <SortOptionDropdown
+                sortOption={searchState.sortOption}
+                onChange={(value) => setSortOption(value)}
+              />
+            </div>
 
-        {results.data.map((restaurant) => (
-          <SearchResultCard restaurant={restaurant} key={restaurant._id} />
-        ))}
-        <PaginationSelector
-          page={results.pagination.page}
-          pages={results.pagination.pages}
-          onPageChange={setPage}
-        />
+            {results?.data?.map((restaurant) => (
+              <SearchResultCard restaurant={restaurant} key={restaurant._id} />
+            ))}
+            {results?.pagination && (
+              <PaginationSelector
+                page={results.pagination.page}
+                pages={results.pagination.pages}
+                onPageChange={setPage}
+              />
+            )}
+          </>
+        )}
       </div>
     </div>
   );

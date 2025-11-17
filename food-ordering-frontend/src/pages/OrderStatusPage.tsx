@@ -5,6 +5,7 @@ import OrderRightColumn from "@/components/OrderRightColumn";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useState } from "react";
 import {
   ChevronUp,
@@ -27,17 +28,60 @@ const OrderStatusPage = () => {
     [date: string]: boolean;
   }>({});
 
-  // Enhanced loading state
+  // Enhanced loading state with skeleton
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-          <div className="text-lg font-medium">Loading your orders...</div>
-          <div className="text-sm text-muted-foreground">
-            Please wait while we fetch your order history
-          </div>
+      <div className="space-y-8">
+        {/* Page Header */}
+        <div className="text-center space-y-2">
+          <h1 className="text-3xl font-bold tracking-tight">Order Status</h1>
+          <p className="text-muted-foreground">
+            Track your orders and delivery status
+          </p>
         </div>
+
+        {/* Skeleton Order Cards */}
+        {[...Array(2)].map((_, index) => (
+          <Card key={index} className="overflow-hidden">
+            <CardHeader className="bg-muted/50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-5 w-5" />
+                  <Skeleton className="h-6 w-48" />
+                </div>
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-6 w-20" />
+                  <Skeleton className="h-8 w-8" />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-6">
+              <div className="grid md:grid-cols-[2fr_1fr] gap-6">
+                <div className="space-y-4">
+                  <Skeleton className="h-6 w-32" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-4 w-1/2" />
+                  </div>
+                  <div className="flex gap-2">
+                    <Skeleton className="h-6 w-16" />
+                    <Skeleton className="h-6 w-20" />
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <Skeleton className="h-6 w-24" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-3/4" />
+                  </div>
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
     );
   }
