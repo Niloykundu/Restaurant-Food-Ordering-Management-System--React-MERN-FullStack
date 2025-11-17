@@ -50,7 +50,7 @@ const OrderStatusPage = () => {
         </div>,
         {
           duration: 5000,
-          position: "top-right",
+          position: "bottom-right",
           style: {
             background: "white",
             border: "1px solid #10b981",
