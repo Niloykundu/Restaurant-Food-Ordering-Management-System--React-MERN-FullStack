@@ -29,7 +29,7 @@ export const useGetMyOrders = () => {
     getMyOrdersRequest,
     {
       refetchInterval: 5000,
-    }
+    },
   );
 
   return { orders, isLoading };
@@ -54,7 +54,7 @@ export const useCreateCheckoutSession = () => {
   const { getAccessTokenSilently } = useAuth0();
 
   const createCheckoutSessionRequest = async (
-    checkoutSessionRequest: CheckoutSessionRequest
+    checkoutSessionRequest: CheckoutSessionRequest,
   ) => {
     const accessToken = await getAccessTokenSilently();
 
@@ -67,7 +67,7 @@ export const useCreateCheckoutSession = () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(checkoutSessionRequest),
-      }
+      },
     );
 
     if (!response.ok) {

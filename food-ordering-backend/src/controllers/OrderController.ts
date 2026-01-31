@@ -1,13 +1,22 @@
-import Stripe from "stripe";
 import { Request, Response } from "express";
 import mongoose from "mongoose";
+import crypto from "crypto";
+import Razorpay from "razorpay";
+
 import Restaurant, { MenuItemType } from "../models/restaurant";
 import Order from "../models/order";
 
-const STRIPE = new Stripe(process.env.STRIPE_API_KEY as string);
-const FRONTEND_URL = process.env.FRONTEND_URL as string;
-const STRIPE_ENDPOINT_SECRET = process.env.STRIPE_WEBHOOK_SECRET as string;
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID as string,
+  key_secret: process.env.RAZORPAY_KEY_SECRET as string,
+});
 
+const FRONTEND_URL = process.env.FRONTEND_URL as string;
+
+/**
+ ✅ Get Logged-in User Orders
+ (UNCHANGED)
+ */
 const getMyOrders = async (req: Request, res: Response) => {
   try {
     const activeStatuses = [
@@ -16,6 +25,7 @@ const getMyOrders = async (req: Request, res: Response) => {
       "outForDelivery",
       "delivered",
     ];
+
     const orders = await Order.find({
       user: req.userId,
       status: { $in: activeStatuses },
@@ -30,6 +40,9 @@ const getMyOrders = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ TYPE (same as before — reused)
+ */
 type CheckoutSessionRequest = {
   cartItems: {
     menuItemId: string;
@@ -45,166 +58,145 @@ type CheckoutSessionRequest = {
   restaurantId: string;
 };
 
-const stripeWebhookHandler = async (req: Request, res: Response) => {
-  let event;
-
+/**
+ ✅ CREATE RAZORPAY ORDER
+ Replaces Stripe Checkout Session
+ */
+const createRazorpayOrder = async (req: Request, res: Response) => {
   try {
-    const sig = req.headers["stripe-signature"];
-    event = STRIPE.webhooks.constructEvent(
-      req.body,
-      sig as string,
-      STRIPE_ENDPOINT_SECRET
-    );
-  } catch (error: any) {
-    console.log(error);
-    return res.status(400).send(`Webhook error: ${error.message}`);
-  }
-
-  if (event.type === "checkout.session.completed") {
-    const orderId = event.data.object.metadata?.orderId;
-
-    // Validate that orderId is a valid MongoDB ObjectId
-    if (!orderId || !mongoose.Types.ObjectId.isValid(orderId)) {
-      console.error(
-        `Invalid orderId in Stripe webhook: ${orderId}. Expected MongoDB ObjectId, but received: ${typeof orderId}`
-      );
-      return res.status(400).json({
-        message: "Invalid order ID format in webhook metadata",
-      });
-    }
-
-    try {
-      const order = await Order.findById(orderId);
-
-      if (!order) {
-        console.error(`Order not found for ID: ${orderId}`);
-        return res.status(404).json({ message: "Order not found" });
-      }
-
-      order.totalAmount = event.data.object.amount_total;
-      order.status = "paid";
-
-      await order.save();
-    } catch (error: any) {
-      console.error(`Error processing order ${orderId}:`, error);
-      return res.status(500).json({
-        message: "Error processing order update",
-      });
-    }
-  }
-
-  res.status(200).send();
-};
-
-const createCheckoutSession = async (req: Request, res: Response) => {
-  try {
-    const checkoutSessionRequest: CheckoutSessionRequest = req.body;
+    const checkoutRequest: CheckoutSessionRequest = req.body;
 
     const restaurant = await Restaurant.findById(
-      checkoutSessionRequest.restaurantId
+      checkoutRequest.restaurantId
     );
 
     if (!restaurant) {
-      throw new Error("Restaurant not found");
+      return res.status(404).json({ message: "Restaurant not found" });
     }
 
+    /**
+     ✅ Calculate total amount
+     */
+    const menuTotal = checkoutRequest.cartItems.reduce(
+      (total: number, cartItem) => {
+        const menuItem = restaurant.menuItems.find(
+          (item: MenuItemType) =>
+            item._id.toString() === cartItem.menuItemId.toString()
+        );
+
+        if (!menuItem) {
+          throw new Error(`Menu item not found: ${cartItem.menuItemId}`);
+        }
+
+        return total + menuItem.price * parseInt(cartItem.quantity);
+      },
+      0
+    );
+
+    const totalAmount = menuTotal + restaurant.deliveryPrice;
+
+    /**
+     ✅ Create DB Order FIRST (pending)
+     */
     const newOrder = new Order({
       restaurant: restaurant,
       user: req.userId,
-      status: "placed",
-      deliveryDetails: checkoutSessionRequest.deliveryDetails,
-      cartItems: checkoutSessionRequest.cartItems,
+      status: "pending", // IMPORTANT
+      deliveryDetails: checkoutRequest.deliveryDetails,
+      cartItems: checkoutRequest.cartItems,
+      totalAmount,
       createdAt: new Date(),
     });
 
-    const lineItems = createLineItems(
-      checkoutSessionRequest,
-      restaurant.menuItems
-    );
-
-    const session = await createSession(
-      lineItems,
-      newOrder._id.toString(),
-      restaurant.deliveryPrice,
-      restaurant._id.toString()
-    );
-
-    if (!session.url) {
-      return res.status(500).json({ message: "Error creating stripe session" });
-    }
-
     await newOrder.save();
-    res.json({ url: session.url });
+
+    /**
+     ✅ Create Razorpay Order
+     */
+    const razorpayOrder = await razorpay.orders.create({
+      amount: totalAmount * 100, // convert to paise
+      currency: "INR",
+      receipt: newOrder._id.toString(),
+    });
+
+    res.json({
+      orderId: razorpayOrder.id,
+      amount: razorpayOrder.amount,
+      currency: razorpayOrder.currency,
+      key: process.env.RAZORPAY_KEY_ID,
+      dbOrderId: newOrder._id,
+    });
   } catch (error: any) {
     console.log(error);
-    res.status(500).json({ message: error.raw.message });
+    res.status(500).json({
+      message: error.message || "Error creating Razorpay order",
+    });
   }
 };
 
-const createLineItems = (
-  checkoutSessionRequest: CheckoutSessionRequest,
-  menuItems: MenuItemType[]
-) => {
-  const lineItems = checkoutSessionRequest.cartItems.map((cartItem) => {
-    const menuItem = menuItems.find(
-      (item) => item._id.toString() === cartItem.menuItemId.toString()
-    );
+/**
+ ✅ VERIFY PAYMENT
+ Replaces Stripe Webhook
+ VERY IMPORTANT — DO NOT SKIP
+ */
+const verifyPayment = async (req: Request, res: Response) => {
+  try {
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      dbOrderId,
+    } = req.body;
 
-    if (!menuItem) {
-      throw new Error(`Menu item not found: ${cartItem.menuItemId}`);
+    const generatedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET as string)
+      .update(razorpay_order_id + "|" + razorpay_payment_id)
+      .digest("hex");
+
+    if (generatedSignature !== razorpay_signature) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment verification failed",
+      });
     }
 
-    const line_item: Stripe.Checkout.SessionCreateParams.LineItem = {
-      price_data: {
-        currency: "gbp",
-        unit_amount: menuItem.price,
-        product_data: {
-          name: menuItem.name,
-        },
-      },
-      quantity: parseInt(cartItem.quantity),
-    };
+    /**
+     ✅ Mark order as PAID
+     */
+    const order = await Order.findById(dbOrderId);
 
-    return line_item;
-  });
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
 
-  return lineItems;
-};
+    order.status = "paid";
 
-const createSession = async (
-  lineItems: Stripe.Checkout.SessionCreateParams.LineItem[],
-  orderId: string,
-  deliveryPrice: number,
-  restaurantId: string
-) => {
-  const sessionData = await STRIPE.checkout.sessions.create({
-    line_items: lineItems,
-    shipping_options: [
-      {
-        shipping_rate_data: {
-          display_name: "Delivery",
-          type: "fixed_amount",
-          fixed_amount: {
-            amount: deliveryPrice, // deliveryPrice is already in integer cents
-            currency: "gbp",
-          },
-        },
-      },
-    ],
-    mode: "payment",
-    metadata: {
-      orderId,
-      restaurantId,
-    },
-    success_url: `${FRONTEND_URL}/order-status?success=true`,
-    cancel_url: `${FRONTEND_URL}/detail/${restaurantId}?cancelled=true`,
-  });
+    // optional but recommended
+    order.set({
+      razorpayOrderId: razorpay_order_id,
+      razorpayPaymentId: razorpay_payment_id,
+    });
 
-  return sessionData;
+    await order.save();
+
+    /**
+     Redirect is optional — depends on frontend flow
+     */
+    res.json({
+      success: true,
+      message: "Payment successful",
+      redirectUrl: `${FRONTEND_URL}/order-status?success=true`,
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({
+      message: "Error verifying payment",
+    });
+  }
 };
 
 export default {
   getMyOrders,
-  createCheckoutSession,
-  stripeWebhookHandler,
+  createRazorpayOrder,
+  verifyPayment,
 };

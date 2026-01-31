@@ -4,15 +4,31 @@ import OrderController from "../controllers/OrderController";
 
 const router = express.Router();
 
+/**
+ ✅ Get logged-in user orders
+ */
 router.get("/", jwtCheck, jwtParse, OrderController.getMyOrders);
 
+/**
+ ✅ Create Razorpay Order
+ (User must be logged in)
+ */
 router.post(
-  "/checkout/create-checkout-session",
+  "/payment/create-order",
   jwtCheck,
   jwtParse,
-  OrderController.createCheckoutSession
+  OrderController.createRazorpayOrder
 );
 
-router.post("/checkout/webhook", OrderController.stripeWebhookHandler);
+/**
+ ✅ Verify Payment Signature
+ MUST be protected — otherwise anyone could mark orders paid
+ */
+router.post(
+  "/payment/verify",
+  jwtCheck,
+  jwtParse,
+  OrderController.verifyPayment
+);
 
 export default router;
